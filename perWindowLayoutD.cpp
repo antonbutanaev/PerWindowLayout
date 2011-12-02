@@ -47,16 +47,25 @@ Layout getCurrentLayout() {
   return Unknown;
 }
 
+bool noFocus(Window window) {
+  return window == PointerRoot || window == None;
+}
+
 Window focusedWindow() {
   Window window;
   int param;
   XGetInputFocus(display, &window, &param);
 
+  if (noFocus(window))
+    return window;
+
   for (;;) {
     unsigned nchildren;
-    Window *children, parent;
-    XQueryTree(display, window, &root, &parent, &children, &nchildren);
-    XFree(children);
+    Window *children, parent, root2;
+    XQueryTree(display, window, &root2, &parent, &children, &nchildren);
+
+    if (nchildren)
+      XFree(children);
     if (parent == root)
       break;
     window = parent;
@@ -66,8 +75,12 @@ Window focusedWindow() {
 
 void proceedEvent(XEvent ev) {
   if (ev.type == ConfigureNotify) {
-    Layout layout = getCurrentLayout();
+
     Window window = focusedWindow();
+    if (noFocus(window))
+      return;
+
+    Layout layout = getCurrentLayout();
 
     WindowLayouts::const_iterator i = windowLayouts.find(window);
     Layout saved = i != windowLayouts.end() ? i->second : 0;
@@ -78,9 +91,11 @@ void proceedEvent(XEvent ev) {
       XkbLockGroup(display, XkbUseCoreKbd, saved);
 
   } else if (ev.type == xkbEventType) {
-    Layout layout = getCurrentLayout();
     Window window = focusedWindow();
+    Layout layout = getCurrentLayout();
+
     windowLayouts[window] = layout;
+
     cout << prefix << "xkbEventType: window=" << window << " layout=" << layout << "\n";
   }
 }
