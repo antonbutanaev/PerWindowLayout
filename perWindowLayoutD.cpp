@@ -1,4 +1,9 @@
 #include <iostream>
+#include <map>
+#include <string>
+
+#include <stdio.h>
+#include <unistd.h>
 
 #include <X11/X.h>
 #include <X11/Xlib.h>
@@ -11,6 +16,12 @@ using namespace std;
 Display *display;
 int xkbEventType;
 Window root;
+
+typedef int Layout;
+const Layout Unknown = -1;
+
+typedef map<Window, Layout> WindowLayouts;
+WindowLayouts windowLayouts;
 
 const char *prefix = "perWindowLayout:: ";
 
@@ -26,14 +37,14 @@ void init() {
   root = DefaultRootWindow(display);
   XSelectInput(display, root, rootEvents);
 
-  cout << prefix << "init: major " << major << " minor: " << minor << " root window: " << root << "\n";
+  cout << prefix << "init: major=" << major << " minor=" << minor << " root=" << root << "\n";
 }
 
-int getCurrentLayout() {
+Layout getCurrentLayout() {
   XkbStateRec state;
   if (XkbGetState(display, XkbUseCoreKbd, &state) == Success)
     return state.locked_group;
-  return -1;
+  return Unknown;
 }
 
 Window focusedWindow() {
@@ -54,11 +65,24 @@ Window focusedWindow() {
 }
 
 void proceedEvent(XEvent ev) {
-  if (ev.type == ConfigureNotify)
-    cout << prefix << "window: " << ev.xconfigure.window << " focus: " << focusedWindow() << " layout: "
-        << getCurrentLayout() << "\n";
-  else if (ev.type == xkbEventType)
-    cout << prefix << "xkbEventType: layout: " << getCurrentLayout() << "\n";
+  if (ev.type == ConfigureNotify) {
+    Layout layout = getCurrentLayout();
+    Window window = focusedWindow();
+
+    WindowLayouts::const_iterator i = windowLayouts.find(window);
+    Layout saved = i != windowLayouts.end() ? i->second : 0;
+
+    cout << prefix << "ConfigureNotify: window=" << window << " layout=" << layout << " saved=" << saved << "\n";
+
+    if (layout != saved)
+      XkbLockGroup(display, XkbUseCoreKbd, saved);
+
+  } else if (ev.type == xkbEventType) {
+    Layout layout = getCurrentLayout();
+    Window window = focusedWindow();
+    windowLayouts[window] = layout;
+    cout << prefix << "xkbEventType: window=" << window << " layout=" << layout << "\n";
+  }
 }
 
 void mainLoop() {
@@ -69,14 +93,20 @@ void mainLoop() {
   }
 }
 
-void cleanup() {
-}
+int main(int argc, char **argv) {
+  string noDaemonArg = "-n", helpArg = "-h";
+  if (argc > 2 || (argc == 2 && argv[1] != noDaemonArg) || (argc == 2 && argv[1] == helpArg)) {
+    cout << "Keep per-window keyboard layout\n\nUsage: perWindowLayout [ -n ]\n\t-n\tdo not daemonize\n";
+    return 1;
+  }
 
-int main() {
-  cout << prefix << "started\n";
+  bool noDaemon = argc == 2 && argv[1] == noDaemonArg;
+  if (!noDaemon && daemon(0, 0) != 0) {
+    cerr << "Failed to daemonize\n";
+    return 1;
+  }
+
   init();
   mainLoop();
-  cleanup();
-  cout << prefix << "finished\n";
   return 0;
 }
