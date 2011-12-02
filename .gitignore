@@ -9,3 +9,13 @@ configure
 depcomp
 install-sh
 missing
+.cproject
+.deps/
+.project
+Makefile
+config.h
+config.log
+config.status
+perWindowLayoutD
+perWindowLayoutD.o
+stamp-h1
