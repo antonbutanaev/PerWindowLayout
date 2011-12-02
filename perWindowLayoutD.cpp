@@ -47,7 +47,7 @@ Layout getCurrentLayout() {
   return Unknown;
 }
 
-bool noFocus(Window window) {
+bool wrongWindow(Window window) {
   return window == PointerRoot || window == None;
 }
 
@@ -56,15 +56,15 @@ Window focusedWindow() {
   int param;
   XGetInputFocus(display, &window, &param);
 
-  if (noFocus(window))
+  if (wrongWindow(window))
     return window;
 
   for (;;) {
-    unsigned nchildren;
+    unsigned numChildren;
     Window *children, parent, root2;
-    XQueryTree(display, window, &root2, &parent, &children, &nchildren);
+    XQueryTree(display, window, &root2, &parent, &children, &numChildren);
 
-    if (nchildren)
+    if (numChildren)
       XFree(children);
     if (parent == root)
       break;
@@ -77,7 +77,7 @@ void proceedEvent(XEvent ev) {
   if (ev.type == ConfigureNotify) {
 
     Window window = focusedWindow();
-    if (noFocus(window))
+    if (wrongWindow(window))
       return;
 
     Layout layout = getCurrentLayout();
