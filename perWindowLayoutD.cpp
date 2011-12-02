@@ -4,12 +4,13 @@
 #include <X11/Xlib.h>
 #include <X11/XKBlib.h>
 #include <X11/Xmd.h>
-#include <X11/keysym.h>
+#include <X11/Xutil.h>
 
 using namespace std;
 
 Display *display;
 int xkbEventType;
+Window root;
 
 const char *prefix = "perWindowLayout:: ";
 
@@ -22,23 +23,47 @@ void init() {
   display = XkbOpenDisplay(0, &xkbEventType, &xkbError, &major, &minor, &reason);
 
   XkbSelectEventDetails(display, XkbUseCoreKbd, XkbStateNotify, XkbAllStateComponentsMask, XkbGroupStateMask);
-  XSelectInput(display, RootWindow(display, DefaultScreen(display)), rootEvents);
+  root = DefaultRootWindow(display);
+  XSelectInput(display, root, rootEvents);
 
-  cout << prefix << "init: major " << major << " minor: " << minor << "\n";
+  cout << prefix << "init: major " << major << " minor: " << minor << " root window: " << root << "\n";
+}
+
+int getCurrentLayout() {
+  XkbStateRec state;
+  if (XkbGetState(display, XkbUseCoreKbd, &state) == Success)
+    return state.locked_group;
+  return -1;
+}
+
+Window focusedWindow() {
+  Window window;
+  int param;
+  XGetInputFocus(display, &window, &param);
+
+  for (;;) {
+    unsigned nchildren;
+    Window *children, parent;
+    XQueryTree(display, window, &root, &parent, &children, &nchildren);
+    XFree(children);
+    if (parent == root)
+      break;
+    window = parent;
+  }
+  return window;
 }
 
 void proceedEvent(XEvent ev) {
   if (ev.type == ConfigureNotify)
-    cout << prefix << "window: " << ev.xconfigure.window << "\n";
-  if (ev.type == xkbEventType)
-    cout << prefix << "window: " << ev.xkey.window << ":" << ev.xkeymap.window << "\n";
-
+    cout << prefix << "window: " << ev.xconfigure.window << " focus: " << focusedWindow() << " layout: "
+        << getCurrentLayout() << "\n";
+  else if (ev.type == xkbEventType)
+    cout << prefix << "xkbEventType: layout: " << getCurrentLayout() << "\n";
 }
-
 
 void mainLoop() {
   for (;;) {
-    XEvent ev = {0};
+    XEvent ev = { 0 };
     XNextEvent(display, &ev);
     proceedEvent(ev);
   }
